@@ -1,0 +1,136 @@
+use super::Statement;
+use super::Routine;
+use super::Arg;
+use super::Constant;
+
+// TODO write some proper tests
+//   >  test block comments in weird places
+
+// TODO handle array types properly
+//   >  That means choosing to ignore all types in first pass, or constrain all types in first pass
+
+// TODO do a proper preprocessor pass
+//   >  none of the defines are used so ignore it for now
+
+// TODO how to handle constants used as literals? two passes?
+//   >  realistically, unless SO turns up something amazing, I'll have to do two passes
+//   >  parse for constants, allowing types to be type or identifier? (use more enums?)
+
+// TODO handle resource strings R"" more appropriately
+
+// doing stuff in peg means not having magic tables etc
+// have to recompile either way, though
+// doing stuff in peg probably means terrible error messages
+
+#[pub]
+document -> Vec<Statement>
+  = (wrap_cmd / wrap_const)+
+
+wrap_cmd -> Statement
+  = (define / block_comment / sep)* c:function (define / block_comment / sep)*
+  { Statement::Rtn(c) }
+
+wrap_const -> Statement
+  = (define / block_comment / sep)* c:constant (define / block_comment / sep)*
+  { Statement::Const(c) }
+
+#[pub]
+constant -> Constant
+  = t:type n:name osep get osep c:literal osep term osep
+  { Constant { typename: t, name:n, value:c } }
+
+#[pub]
+function -> Routine
+  = t:type n:name osep "(" osep v:varlist osep ")" osep get osep c:ushort osep term osep
+  { Routine { name:n, code:c, args:v, return_type:t } }
+
+// order matters here; real must precede integer because rust-peg only does partial backtracking
+literal -> String
+  = x:(wrap_real / wrap_integer / string / hack_const / name / arr_literal) { x }
+
+// TODO disallow mixed array types?
+// TODO consider extracting mixed array types?
+// What about, say, char or string arrays????
+arr_literal -> String
+  = "[" osep ((wrap_real / wrap_integer) ** (osep "," osep)) "]" { match_str.to_string() }
+
+// either stop caring about this for constants and check in post, or figure out how to check existing constants
+hack_const -> String
+  = ("TRUE" / "FALSE") { match_str.to_string() }
+
+varlist -> Vec<Arg>
+  = arg ** (osep "," osep)
+
+arg -> Arg
+  = t:type n:name v:varget? { Arg { typename:t, name:n, default_value:v } }
+
+varget -> String
+  = osep get osep v:literal { v.to_string() }
+
+type -> String
+  = osep s:type_name sep { match_str.parse().unwrap() }
+
+#[pub]
+type_name -> String
+  = ("int" / "float" / "string" / "void"
+  / "any" / "command" / "effect" / "event" / "itemproperty" / "location"
+  / "object" / "player" / "resource" / "vector") (osep "[]")?
+  { match_str.to_string() }
+
+name -> String
+  = [a-zA-Z_]+[a-zA-Z_0-9]* { match_str.to_string() }
+
+get
+  = "="
+
+term
+  = ";"
+
+sep -> String
+  = [ \n\t]+ line_comment* { match_str.to_string() }
+  / line_comment+ [ \n\t]* { match_str.to_string() }
+
+osep
+  = sep*
+
+#[pub]
+define -> String
+  = "#define" " "+ [^\n]+ "\n" { match_str.to_string() }
+
+#[pub]
+line_comment -> String
+  = "//" [^\n]* "\n" { match_str.to_string() }
+
+#[pub]
+block_comment -> String
+  = "/*" (!"*/" .)* "*/" { match_str.to_string() }
+
+// this is silly, maybe should have str_int or something instead of conversions
+wrap_integer -> String
+  = z:integer { z.to_string() }
+
+integer -> i64
+  = "-"? [0-9]+ { match_str.parse().unwrap() }
+
+uinteger -> u64
+  = [0-9]+ { match_str.parse().unwrap() }
+
+ushort -> u16
+  = [0-9]+ { match_str.parse().unwrap() }
+
+// this is sillier than silly
+wrap_real -> String
+  = r:real { r.to_string() }
+
+real -> f64
+  = f:float_nosuffix "f"? { f.parse().unwrap() }
+
+float_nosuffix -> String
+  = "-"? [0-9]+ "." [0-9]* { match_str.to_string() }
+
+
+string -> String
+  = "R"? s:plain_string { s }
+
+plain_string -> String
+  = "\"" [^"]* "\"" { match_str.to_string() }

@@ -1,6 +1,6 @@
 use super::Statement;
 use super::Routine;
-use super::Arg;
+use super::RoutineArg;
 use super::Constant;
 
 // TODO write some proper tests
@@ -28,16 +28,16 @@ document -> Vec<Statement>
 
 wrap_cmd -> Statement
   = (define / block_comment / sep)* c:function (define / block_comment / sep)*
-  { Statement::Rtn(c) }
+  { Statement::Routine(c) }
 
 wrap_const -> Statement
   = (define / block_comment / sep)* c:constant (define / block_comment / sep)*
-  { Statement::Const(c) }
+  { Statement::Constant(c) }
 
 #[pub]
 constant -> Constant
   = t:type n:name osep get osep c:literal osep term osep
-  { Constant { typename: t, name:n, value:c } }
+  { Constant { type_name: t, name:n, value:c } }
 
 #[pub]
 function -> Routine
@@ -58,11 +58,11 @@ arr_literal -> String
 hack_const -> String
   = ("TRUE" / "FALSE") { match_str.to_string() }
 
-varlist -> Vec<Arg>
+varlist -> Vec<RoutineArg>
   = arg ** (osep "," osep)
 
-arg -> Arg
-  = t:type n:name v:varget? { Arg { typename:t, name:n, default_value:v } }
+arg -> RoutineArg
+  = t:type n:name v:varget? { RoutineArg { type_name:t, name:n, default_value:v } }
 
 varget -> String
   = osep get osep v:literal { v.to_string() }

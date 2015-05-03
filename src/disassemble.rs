@@ -1,14 +1,14 @@
 use std;
 use std::collections::HashMap;
 use std::io::prelude::*;
-use std::io::{Cursor,Error};
+use std::io::{Cursor, Error};
 use std::iter::repeat;
 use std::string::String;
 
 use byteorder::{BigEndian, ReadBytesExt};
 
-use super::{Routine};
-use opcodes::{Opcode,Operand};
+use super::Routine;
+use opcodes::{Opcode, Operand, get_nwtypes};
 use io_utils::{bytes_to_uint, bytes_to_int, bytes_to_float};
 
 
@@ -17,28 +17,30 @@ const HEADER_BYTES: usize = 8;
 
 #[derive(Debug)]
 pub struct DecodeError {
-  message: String,
-  line: usize,
+  pub message: String,
+  byte: usize,
 }
 
 pub enum DisassemblyError {
-  IOError(Error),
+  //IOError(Error),
   CommandStreamError(DecodeError)
 }
 
-pub type DisassemblyResult<T> = Result<T, DisassemblyError>;
+pub type DisassemblyResult = Result<(), DisassemblyError>;
 
 // TODO custom error type
 pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
                routines: &HashMap<u16, Routine>,
                input_name: &String,
-               filename: Option<String>) -> DisassemblyResult<bool> {
+               filename: Option<String>) -> Result<(), DecodeError> {
 
-  let fake_err = Err(DisassemblyError::CommandStreamError(DecodeError{message:"foo".to_string(), line: 0}));
+  //let fake_err = Err(DisassemblyError::CommandStreamError(DecodeError{message:"foo".to_string(),
+  //                                                                    line: 0}));
+
   // The first HEADER_BYTES bytes should be a header string
   if asm.len() < HEADER_BYTES {
     println_err!("{} missing NWScript header bytes", input_name);
-    return fake_err
+    return Err(DecodeError{message: "missing header bytes".to_string(), byte: 0})
   }
   println!(";;{}", std::str::from_utf8(&asm[..HEADER_BYTES]).unwrap());
 
@@ -50,7 +52,7 @@ pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
   let start_idx = HEADER_BYTES + 5;
   if asm.len() < start_idx {
     println_err!("{} missing NWScript size bytes", input_name);
-    return fake_err
+    return Err(DecodeError{message: "missing size bytes".to_string(), byte: 0})
   }
 
   let longest_code = opcodes.iter()
@@ -69,7 +71,7 @@ pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
 
       if (asm_size_u32 as usize) != asm.len() {
         println_err!("T {} does not match file size ({} bytes)", asm_size_u32, asm.len());
-        return fake_err
+        return Err(DecodeError{message: "size mismatch".to_string(), byte: 0})
       } else {
         // really need to set up an output stream or something
         // TODO get T.fmt etc from opcodes
@@ -79,12 +81,12 @@ pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
     Some(op) => {
       println_err!("Unexpected opcode {:#04X} at byte {}, expected T (0x42)",
                    op.code, HEADER_BYTES);
-      return fake_err
+      return Err(DecodeError{message: "T byte not present".to_string(), byte: 0})
     },
     None => {
       println_err!("Unknown opcode {:#04X} at byte {}, expected T (0x42)",
                    asm[HEADER_BYTES], HEADER_BYTES);
-      return fake_err
+      return Err(DecodeError{message: "T byte not present".to_string(), byte: 0})
     }
   }
 
@@ -95,38 +97,54 @@ pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
 
   /* Start parsing the command stream */
 
-  // TODO handle special cases like SAVE_STATE
+  // TODO handle special cases like SAVE_STATE (and T)
+  let nwtypes = get_nwtypes();
   let asm_len = asm.len();
   let empty: Vec<Operand> = vec!(); // hack for arg extraction within loop
   let mut idx = (start_idx, start_idx);
 
   loop {
-    idx = step_or_return!(idx, 1, asm_len, fake_err); // .0 => .1, .1 => .1 + step
+    idx = step_or_return!(idx, 1, asm_len); // .0 => .1, .1 => .1 + step
 
     // Get a command byte and interpret it
     let op = match opcodes.get(asm[idx.0] as usize).and_then(|c| c.as_ref()) {
       Some(op) => op,
       None => {
         println_err!("Unknown opcode {:#04X} at byte {}", asm[idx.0], idx.0);
-        return fake_err
+        return Err(DecodeError{message: "unknown opcode".to_string(), byte: 0})
       }
     };
 
     // Get the type byte - type of bytes that may be popped off the stack
     // determines legal args, but isn't necessarily the type of them
-    idx = step_or_return!(idx, 1, asm_len, fake_err);
+    idx = step_or_return!(idx, 1, asm_len);
     // TODO make type an Option? To handle T etc
     let stack_type = if op.types.contains(&asm[idx.0]) {
       asm[idx.0]
     } else {
       println_err!("Type {:#04X} not in list of legal types for opcode {}",
                    asm[idx.0], op.fmt);
-      return fake_err
+      return Err(DecodeError{message: "illegal type".to_string(), byte: 0})
     };
 
     let pad = longest_code - op.fmt.len();
-    print!("{}{}{:#04X}", op.fmt, &pad_str[0..pad], stack_type);
-
+    // TODO this needs to be recalculated to account for type suffixes
+    match nwtypes.get(stack_type as usize).and_then(|t| t.as_ref()) {
+      Some(t) => match t.abbr {
+        Some(a) => {
+          if 2 > op.types.len() {
+            print!("{}{}", op.fmt, &pad_str[0..pad])
+          } else {
+            print!("{}{}{}", op.fmt, a, &pad_str[0..(pad-a.len())])
+          }
+        },
+        None => print!("{}{}{:#04X}", op.fmt, &pad_str[0..pad], stack_type)
+      },
+      None => {
+        println_err!("Undocumented type {} for opcode {}", stack_type, op.fmt);
+        return Err(DecodeError{message: "undocumented type".to_string(), byte: 0})
+      }
+    }
 
     // Get the arg list given the type byte
     let args = match op.args {
@@ -142,65 +160,70 @@ pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
     // Variable length argument types (String) are preceded by a size argument
     let mut prev_val = None;
 
-    for arg in args {
+    // TODO formatting is broke, fix it
+    // don't add trailing whitespace if there are no args
+    // first arg indent needs to take into account variant type formatting for opcodes
+    for (_, arg) in args.iter().enumerate() {
+      let sep = &pad_str[0..5];
+      //let sep = if 0 == n { "" } else { full_sep };
       match *arg {
         // Could change ADT to be Operand(INT|UINT|FLT|STR, size) with INT(Offset|Integer) etc?
         Operand::Routine(size) | Operand::Object(size) | Operand::Size(size) => {
-          idx = step_or_return!(idx, size, asm_len, fake_err);
+          idx = step_or_return!(idx, size, asm_len);
           let num = bytes_to_uint(&asm[idx.0..idx.1]);
 
           match *arg { // wish we had fallthrough because nesting this sucks :S
             Operand::Size(..) => {
               prev_val = Some(num);
-              print!("\t{:#X}", num)
+              print!("{}{:#X}", sep, num)
             },
             Operand::Routine(..) => {
               let id = num as u16; // consider parsing as u16 but storing as u32 in rtn struct?
               if let Some(f) = routines.get(&id) {
-                print!("\t{}#{:#X}", f.name, num)
+                print!("{}{}#{:#X}", sep, f.name, num)
               } else {
-                print!("\t???#{}", num)
+                print!("{}???#{}", sep, num)
               }
             },
-            _ => print!("\t{:#X}", num)
+            _ => print!("{}{:#X}", sep, num)
           };
         },
         Operand::Offset(size) | Operand::Integer(size) | Operand::ArgCount(size) => {
-          idx = step_or_return!(idx, size, asm_len, fake_err);
+          idx = step_or_return!(idx, size, asm_len);
           let num = bytes_to_int(&asm[idx.0..idx.1]);
 
           match *arg { // wish we had fallthrough because nesting this sucks :S
-            Operand::Offset(..) => print!("\t@{}", num),
-            _ => print!("\t{}", num)
+            Operand::Offset(..) => print!("{}@{}", sep, num),
+            _ => print!("{}{}", sep, num)
           };
         },
         Operand::Float(size) => {
-          idx = step_or_return!(idx, size, asm_len, fake_err);
+          idx = step_or_return!(idx, size, asm_len);
           let num = bytes_to_float(&asm[idx.0..idx.1]);
-          print!("\t{}", num);
+          print!("{}{}", sep, num);
         },
         Operand::String => {
           let str_len = match prev_val {
             Some(n) => n as usize,
             None => {
               println_err!("\nString argument without preceding length argument!");
-              return fake_err
+              return Err(DecodeError{message: "String without size".to_string(), byte: 0})
             }
           };
 
-          idx = step_or_return!(idx, str_len, asm_len, fake_err);
+          idx = step_or_return!(idx, str_len, asm_len);
           let s = std::str::from_utf8(&asm[idx.0..idx.1]).unwrap();
-          print!("\t\"{}\"", s);
+          print!("{}\"{}\"", sep, s);
 
         }
         // TODO errors/streams etc
       }
     }
     println!("");
-    if idx.0 == asm_len {
+    if idx.1 == asm_len {
       break
     }
   }
 
-  fake_err
+  Ok(())
 }

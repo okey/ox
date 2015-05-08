@@ -24,7 +24,7 @@ mod disassemble;
 mod assemble;
 
 use io_utils::{read_as_bytes, read_as_string};
-use disassemble::disassemble;
+use disassemble::{disassemble, DisassemblyError};
 
 peg_file! nwscript("nwscript.rustpeg");
 use nwscript::document;
@@ -181,7 +181,10 @@ fn main() {
 
     match disassemble(&asm, &opcodes, &routines, asm_path, None) {
       Ok(_) => (),
-      Err(e) => { panic!("Disassembly failed: {}", e.message); } // TODO fix error handling
+      Err(e) => match e {
+        DisassemblyError::CommandStreamError(e) => panic!("Disassembly failed: {}", e.message),
+        _ => panic!("Disassembly failed ???") // TODO fix error handling
+      }
     }
 
     return

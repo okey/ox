@@ -45,25 +45,30 @@ fn assemble_line<T: Write>(line: &String,
     },
     None => {
   //} else {
-    match opcodes.get(parts[0]) {
-      Some(op) => { // standard opcode, type known from name and or code
-        match op.types.len() {
-          // TODO change types to Option<> and skip to args if None
-          //0 => { try!(output.write(format!("RMATCH {}\n", op.fmt).as_bytes())); },
-          //1 => { try!(output.write(format!("RMATCH {} {}\n", op.fmt, op.types[0]).as_bytes())); },
-          0 => (*op, None),
-          1 => (*op, Some(op.types[0])),
-         _ => {
-            let e_str = format!("Opcode definition error: {} has more than one type", op.fmt);
-            return Err(Error::new(ErrorKind::InvalidInput, e_str))
+      match opcodes.get(parts[0]) {
+        Some(op) => { // standard opcode, type known from name and or code
+          match op.types {
+            Some(ref types) => {
+              match types.len() {
+              // TODO change types to Option<> and skip to args if None
+                //0 => { try!(output.write(format!("RMATCH {}\n", op.fmt).as_bytes())); },
+                //1 => { try!(output.write(format!("RMATCH {} {}\n", op.fmt, op.types[0]).as_bytes())); },
+                0 => (*op, None),
+                1 => (*op, Some(types[0])),
+                _ => {
+                  let e_str = format!("Opcode definition error: {} has more than one type", op.fmt);
+                  return Err(Error::new(ErrorKind::InvalidInput, e_str))
+                }
+              }
+            },
+            None => (*op, None)
           }
-        }
-      },
-      None => {
+        },
+        None => {
         let e_str = format!("Expected valid opcode string, got \"{}\"", parts[0]);
-        return Err(Error::new(ErrorKind::InvalidInput, e_str))
+          return Err(Error::new(ErrorKind::InvalidInput, e_str))
+        }
       }
-    }
     }
   };
   println!("{:#04X} {:?} ({})", op.code, t_byte, op.fmt);
@@ -122,28 +127,31 @@ pub fn assemble<T: BufRead>(input: T,
       &Some(ref o) => {
         reverse_opcodes.insert(&o.fmt, &o);
 
-        if o.types.len() > 1 {
-          for t in o.types.iter() {
-            let variant_type = match nwtypes.get(*t as usize).and_then(|c| c.as_ref()) {
-              Some(t) => t,
-              None => {
-                let e_str = format!("Variant type {} not found for opcode {}", t, o.fmt);
-                return Err(Error::new(ErrorKind::NotFound, e_str))
-              }
-            };
+        match o.types {
+          Some(ref types) if types.len() > 1 => {
+            for t in types.iter() {
+              let variant_type = match nwtypes.get(*t as usize).and_then(|c| c.as_ref()) {
+                Some(t) => t,
+                None => {
+                  let e_str = format!("Variant type {} not found for opcode {}", t, o.fmt);
+                  return Err(Error::new(ErrorKind::NotFound, e_str))
+                }
+              };
 
-            // TODO what is up with EQUAL/NEQUAL and 0x24/TT?
-            // TT supports all the engine types but they're allowed individually too? ????
-            match variant_type.abbr {
-              Some(a) => {
-                let mut variant_name = String::from_str(&o.fmt);
-                variant_name.push_str(a);
+              // TODO what is up with EQUAL/NEQUAL and 0x24/TT?
+              // TT supports all the engine types but they're allowed individually too? ????
+              match variant_type.abbr {
+                Some(a) => {
+                  let mut variant_name = String::from_str(&o.fmt);
+                  variant_name.push_str(a);
 
-                variant_opcodes.insert(variant_name, (&o, Some(variant_type)));
-              },
-              None => { variant_opcodes.insert(o.fmt.to_string(), (&o, None)); }
-            };
-          }
+                  variant_opcodes.insert(variant_name, (&o, Some(variant_type)));
+                },
+                None => { variant_opcodes.insert(o.fmt.to_string(), (&o, None)); }
+              };
+            }
+          },
+          _ => ()
         }
       },
       &None => ()

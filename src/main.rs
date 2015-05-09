@@ -24,7 +24,7 @@ mod io_utils;
 mod disassemble;
 mod assemble;
 
-use io_utils::{read_as_bytes, read_as_string};
+use io_utils::read_as_string;
 use disassemble::{disassemble, DisassemblyError};
 
 peg_file! nwscript("nwscript.rustpeg");
@@ -184,7 +184,7 @@ fn main() {
       Err(reason) => panic!("Opening {} failed: {}", &asm_path, Error::description(&reason))
     });
 
-    match disassemble(&mut rdr, &opcodes, &routines, asm_path, None) {
+    match disassemble(&mut rdr, &opcodes, &routines, None) {
       Ok(_) => (),
       Err(e) => match e {
         DisassemblyError::OpStreamError(m, b) => panic!("Disassembly failed: {} (byte {})", m, b),

@@ -8,14 +8,14 @@ use byteorder::{BigEndian, ReadBytesExt};
 use disassemble::DisassemblyError;
 use disassemble::DisassemblyError::DataError;
 
-pub fn read_as_bytes(path: &String) -> io::Result<Vec<u8>> {
+/*pub fn read_as_bytes(path: &String) -> io::Result<Vec<u8>> {
   let mut file = try!(File::open(&path));
   let mut v = Vec::new();
   match file.read_to_end(&mut v) {
     Ok(_) => Ok(v),
     Err(e) => Err(e),
   }
-}
+}*/
 
 pub fn read_as_string(path: &String) -> io::Result<String> {
   let mut file = try!(File::open(&path));

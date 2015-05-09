@@ -187,7 +187,7 @@ fn main() {
     match disassemble(&mut rdr, &opcodes, &routines, asm_path, None) {
       Ok(_) => (),
       Err(e) => match e {
-        DisassemblyError::CommandStreamError(e) => panic!("Disassembly failed: {}", e.message),
+        DisassemblyError::OpStreamError(m, b) => panic!("Disassembly failed: {} (byte {})", m, b),
         _ => panic!("Disassembly failed ???") // TODO fix error handling
       }
     }

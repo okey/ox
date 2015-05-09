@@ -1,21 +1,5 @@
 #![macro_use]
 
-macro_rules! step_or_return {
-  ($t:ident, $n:expr, $lim:expr) => (
-    if ($t.1 + $n) <= $lim { ($t.1, $t.1 + $n) } else {
-      return Err(DecodeError{
-        message: format!("step failed at {:?}+{} < {}", $t, $n, $lim), byte: 0})
-    });
-}
-
-macro_rules! step_or_return2 {
-  ($t:ident, $n:expr, $lim:expr) => (
-    if ($t.1 + $n) <= $lim { ($t.1, $t.1 + $n) } else {
-      return Err(CommandStreamError(DecodeError{
-        message: format!("step failed at {:?}+{} < {}", $t, $n, $lim), byte: 0}))
-    });
-}
-
 macro_rules! println_err(
   ($($arg:tt)*) => (
     match writeln!(&mut ::std::io::stderr(), $($arg)* ) {
@@ -28,9 +12,26 @@ macro_rules! read_exact {
     {
       let _sz = try!($rdr.read($arr));
       if _sz != $n {
-        let msg = format!("Unexpected EOF: got {} bytes but expected {}", _sz, $n);
-        return Err(CommandStreamError(DecodeError{message: msg.to_string(), byte: 0}))
+        // TODO accept byte count
+        op_err!(0, "Unexpected EOF: got {} bytes but expected {}", _sz, $n)
       }
     }
   }
+}
+
+macro_rules! output {
+  ($wtr:ident, $fmt:expr, $($arg:expr),*) =>
+    (try!($wtr.write(format!($fmt, $($arg),*).as_bytes())));
+}
+
+macro_rules! op_err {
+  ($byte:expr, $fmt:expr) =>
+    (return Err(OpStreamError($fmt.to_string(), $byte)));
+  ($byte:expr, $fmt:expr, $($arg:expr),*) =>
+    (return Err(OpStreamError(format!($fmt, $($arg),*).to_string(), $byte)))
+}
+
+macro_rules! data_err {
+  ($fmt:expr, $($arg:expr),*) =>
+    (return Err(DataError(format!($fmt, $($arg),*).to_string())))
 }

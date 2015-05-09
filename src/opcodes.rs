@@ -30,11 +30,13 @@ pub enum Operand {
 // it will mean matching on code and _type twice, though
 // but unless I use enums for code and _type and have a 1:1 type mapping from
 // (code, _type) => argtype I'll have to match on code and _type again anyway...
-pub struct OpcodePayload {
-  pub  code: u8, //dodgy, maybe should make an enum
+pub struct OpPayload<'a > {
+  pub start: usize,
+  pub code: &'a Opcode, //dodgy, maybe should make an enum.. or pass a reference?
   pub _type: Option<u8>, // could be an NWType?
-  pub  args: Option<Vec<Vec<u8>>>// maybe everything should stay as bytes until we print?
+  pub args: Vec<(&'a Operand, Vec<u8>)>// maybe everything should stay as bytes until we print?
 }// Too bad we can't have a struct hack like in C?
+// Maybe I should alter the
 
 
 pub struct NWType {

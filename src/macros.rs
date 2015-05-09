@@ -8,13 +8,14 @@ macro_rules! println_err(
     }));
 
 macro_rules! read_exact {
-  ($rdr:ident, $arr:expr, $n:expr) => {
+  ($rdr:ident, $arr:expr, $n:expr, $b:expr) => {
     {
       let _sz = try!($rdr.read($arr));
       if _sz != $n {
         // TODO accept byte count
-        op_err!(0, "Unexpected EOF: got {} bytes but expected {}", _sz, $n)
+        op_err!($b + _sz, "Unexpected EOF: got {} bytes but expected {}", _sz, $n)
       }
+      _sz
     }
   }
 }

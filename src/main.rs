@@ -6,6 +6,7 @@
 //#![feature(exit_status)]
 #![feature(collections)] // peg warnings
 #![plugin(docopt_macros)]
+#![feature(convert)]
 extern crate rustc_serialize;
 extern crate docopt;
 extern crate byteorder;
@@ -174,12 +175,16 @@ fn main() {
     // Read the compiled file
     let asm_path = &args.flag_d; // TODO stream this instead
 
-    let asm = match read_as_bytes(asm_path) {
+    /*let asm = match read_as_bytes(asm_path) {
       Err(e) => panic!("{}", e),
       Ok(b) => b
-    };
+    };*/
+    let mut rdr = std::io::BufReader::new(match File::open(&asm_path){
+      Ok(f) => f,
+      Err(reason) => panic!("Opening {} failed: {}", &asm_path, Error::description(&reason))
+    });
 
-    match disassemble(&asm, &opcodes, &routines, asm_path, None) {
+    match disassemble(&mut rdr, &opcodes, &routines, asm_path, None) {
       Ok(_) => (),
       Err(e) => match e {
         DisassemblyError::CommandStreamError(e) => panic!("Disassembly failed: {}", e.message),

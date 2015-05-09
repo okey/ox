@@ -25,6 +25,18 @@ pub enum Operand {
   ArgCount(usize)
 }
 
+// this would need data extraction again... maybe that's okay if we just read raw bytes?
+// it's not like an op can ever be invalid if it has the correct number of byes
+// it will mean matching on code and _type twice, though
+// but unless I use enums for code and _type and have a 1:1 type mapping from
+// (code, _type) => argtype I'll have to match on code and _type again anyway...
+pub struct OpcodePayload {
+  pub  code: u8, //dodgy, maybe should make an enum
+  pub _type: Option<u8>, // could be an NWType?
+  pub  args: Option<Vec<Vec<u8>>>// maybe everything should stay as bytes until we print?
+}// Too bad we can't have a struct hack like in C?
+
+
 pub struct NWType {
   pub code: u8,
   pub abbr: Option<&'static str>,

@@ -2,7 +2,7 @@ use std;
 use std::collections::HashMap;
 //use std::io::prelude::*;
 use std::fs::File;
-use std::io::{Error, Write, BufWriter};
+use std::io::{Error, Read, Write, BufWriter, BufRead};
 use std::iter::repeat;
 use std::string::String;
 
@@ -39,17 +39,16 @@ pub type DisassemblyResult = Result<(), DisassemblyError>;
 
 // TODO <T: Read>
 // TODO decompiling will need an actual struct with opcode and stack args, probably
-pub fn disassemble_op<T: Write>(asm: &[u8],
-                                opcodes: &[Option<Opcode>],
-                                output: &mut T,
-                                routines: &HashMap<u16, Routine>,
-                                nwtypes: &[Option<NWType>]
-                                ) -> Result<(usize, usize), DisassemblyError> {
-  let mut idx = (0, 0);
-  let asm_len = asm.len();
-  let empty: Vec<Operand> = vec!(); // hack for arg extraction within loop
+pub fn disassemble_op<S: Read, T: Write>(asm: &mut S,
+                                         opcodes: &[Option<Opcode>],
+                                         output: &mut T,
+                                         routines: &HashMap<u16, Routine>,
+                                         nwtypes: &[Option<NWType>]
+                                         ) -> Result<(()), DisassemblyError> {
 
-  // Calculating this inside a loop is inefficient...
+  let count = 0; // TODO pass in?
+  let empty: Vec<Operand> = vec!(); // hack for arg extraction within loop
+  // Calculating this inside a loop is very inefficient...
   let longest_code = opcodes.iter()
     .filter_map(|c| match *c { Some(ref c) => Some(c.fmt.len()), None => None })
     .max().unwrap();
@@ -59,27 +58,27 @@ pub fn disassemble_op<T: Write>(asm: &[u8],
                                   ).unwrap();
 
 
-  idx = step_or_return2!(idx, 1, asm_len);
   // Get a command byte and interpret it
-  let op = match opcodes.get(asm[idx.0] as usize).and_then(|c| c.as_ref()) {
+  let mut byte_buf = [0 as u8; 1];
+  read_exact!(asm, &mut byte_buf, byte_buf.len());
+
+  let op = match opcodes.get(byte_buf[0] as usize).and_then(|c| c.as_ref()) {
     Some(op) => op,
     None => {
-      println_err!("Unknown opcode {:#04X} at byte {}", asm[idx.0], idx.0);
+      println_err!("Unknown opcode {:#04X} at byte {}", byte_buf[0], count);
       return Err(CommandStreamError(DecodeError{message: "unknown opcode".to_string(), byte: 0}))
     }
   };
 
   // Get the type byte - type of bytes that may be popped off the stack
   // determines legal args, but isn't necessarily the type of them
-  // TODO make type an Option? To handle T etc
   let stack_type = match op.types {
     Some(ref t) => {
-      idx = step_or_return2!(idx, 1, asm_len);
-      if t.contains(&asm[idx.0]) {
-        asm[idx.0]
+      read_exact!(asm, &mut byte_buf, byte_buf.len());
+      if t.contains(&byte_buf[0]) {
+        byte_buf[0]
       } else {
-        println_err!("Type {:#04X} not in list of legal types for opcode {}",
-                     asm[idx.0], op.fmt);
+        println_err!("Type {:#04X} not in list of legal types for opcode {}", byte_buf[0], op.fmt);
         return Err(CommandStreamError(DecodeError{message: "illegal type".to_string(), byte: 0}))
       }
     },
@@ -112,7 +111,7 @@ pub fn disassemble_op<T: Write>(asm: &[u8],
     },
     None => {
       println_err!("Undocumented type {} for opcode {}", stack_type, op.fmt);
-      return Err(CommandStreamError(DecodeError{message: "undocumented type".to_string(), byte: 0}))
+      return Err(CommandStreamError(DecodeError{message: "Undocumented type".to_string(), byte: 0}))
     }
   }
 
@@ -139,8 +138,9 @@ pub fn disassemble_op<T: Write>(asm: &[u8],
     match *arg {
       // Could change ADT to be Operand(INT|UINT|FLT|STR, size) with INT(Offset|Integer) etc?
       Operand::Routine(size) | Operand::Object(size) | Operand::Size(size) => {
-        idx = step_or_return2!(idx, size, asm_len);
-        let num = bytes_to_uint(&asm[idx.0..idx.1]);
+        let mut arg_vec = vec![0 as u8; size];;
+        read_exact!(asm, arg_vec.as_mut_slice(), size);
+        let num = bytes_to_uint(arg_vec.as_slice());
 
         match *arg { // wish we had fallthrough because nesting this sucks :S
           Operand::Size(..) => {
@@ -164,8 +164,9 @@ pub fn disassemble_op<T: Write>(asm: &[u8],
         };
       },
       Operand::Offset(size) | Operand::Integer(size) | Operand::ArgCount(size) => {
-        idx = step_or_return2!(idx, size, asm_len);
-        let num = bytes_to_int(&asm[idx.0..idx.1]);
+        let mut arg_vec = vec![0 as u8; size];
+        read_exact!(asm, arg_vec.as_mut_slice(), size);
+        let num = bytes_to_int(arg_vec.as_slice());
 
         match *arg { // wish we had fallthrough because nesting this sucks :S
           Operand::Offset(..) => try!(output.write(format!("{}@{}", sep, num).as_bytes())),
@@ -173,8 +174,9 @@ pub fn disassemble_op<T: Write>(asm: &[u8],
         };
       },
       Operand::Float(size) => {
-        idx = step_or_return2!(idx, size, asm_len);
-        let num = bytes_to_float(&asm[idx.0..idx.1]);
+        let mut arg_vec = vec![0 as u8; size];
+        read_exact!(asm, arg_vec.as_mut_slice(), size);
+        let num = bytes_to_float(arg_vec.as_slice());
         try!(output.write(format!("{}{}", sep, num).as_bytes()));
       },
       Operand::String => {
@@ -186,8 +188,9 @@ pub fn disassemble_op<T: Write>(asm: &[u8],
           }
         };
 
-        idx = step_or_return2!(idx, str_len, asm_len);
-        let s = std::str::from_utf8(&asm[idx.0..idx.1]).unwrap();
+        let mut arg_vec = vec![0 as u8; str_len];
+        read_exact!(asm, arg_vec.as_mut_slice(), str_len);
+        let s = String::from_utf8(arg_vec).unwrap();
         try!(output.write(format!("{}\"{}\"", sep, s).as_bytes()));
 
       }
@@ -196,36 +199,25 @@ pub fn disassemble_op<T: Write>(asm: &[u8],
   }
   try!(output.write(b"\n"));
 
-  Ok(idx)
+  Ok(())
 }
 
 // TODO custom error type
-pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
+pub fn disassemble<S: BufRead>(asm: &mut S, opcodes: &[Option<Opcode>],
                    routines: &HashMap<u16, Routine>,
                    input_name: &String,
                    filename: Option<String>) -> Result<(), DisassemblyError> {
 
-  //let fake_err = Err(DisassemblyError::CommandStreamError(DecodeError{message:"foo".to_string(),
-  //                                                                    line: 0}));
+  let nwtypes = get_nwtypes();
+  let mut wtr = BufWriter::new(match filename {
+    Some(path) => box try!(File::create(path)) as Box<Write>,
+    None => box std::io::stdout() as Box<Write>
+  });
 
   // The first HEADER_BYTES bytes should be a header string
-  if asm.len() < HEADER_BYTES {
-    println_err!("{} missing NWScript header bytes", input_name);
-    return Err(CommandStreamError(DecodeError{message: "missing header bytes".to_string(), byte: 0}))
-  }
-  println!(";;{}", std::str::from_utf8(&asm[..HEADER_BYTES]).unwrap());
-
-  // TODO implement try!() or something for all these returns
-  // This whole section is (almost) the same as one in the loop
-  // make typename byte an Option?
-
-  // The next 5 bytes are the T opcode - TODO get operand size from T
-  let start_idx = HEADER_BYTES + 5;
-  if asm.len() < start_idx {
-    println_err!("{} missing NWScript size bytes", input_name);
-    return Err(CommandStreamError(DecodeError{message: "missing size bytes".to_string(), byte: 0}))
-  }
-
+  let mut header = [0 as u8; HEADER_BYTES];
+  read_exact!(asm, &mut header, header.len());
+  try!(wtr.write(format!(";;{}\n", std::str::from_utf8(&header).unwrap()).as_bytes()));
   /*
   let longest_code = opcodes.iter()
     .filter_map(|c| match *c { Some(ref c) => Some(c.fmt.len()), None => None })
@@ -236,14 +228,7 @@ pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
                                   ).unwrap();
   */
 
-
-  let nwtypes = get_nwtypes();
-  let mut wtr = BufWriter::new(match filename {
-    Some(path) => box try!(File::create(path)) as Box<Write>,
-    None => box std::io::stdout() as Box<Write>
-  });
-
-  try!(disassemble_op(&asm[HEADER_BYTES..], opcodes, &mut wtr, routines, &nwtypes));
+  try!(disassemble_op(asm, opcodes, &mut wtr, routines, &nwtypes));
   // TODO need a way to assert T is present
   // TODO need a way to return the value of T <arg> and check it against the file size
   // ...if possible
@@ -286,15 +271,8 @@ pub fn disassemble(asm: &[u8], opcodes: &[Option<Opcode>],
   /* Start parsing the command stream */
 
   // TODO handle special cases like SAVE_STATE (and T)
-  let mut idx = (start_idx, start_idx);
-
   loop {
-    let inc = try!(disassemble_op(&asm[idx.1..], opcodes, &mut wtr, routines, &nwtypes));
-    idx = (idx.0 + inc.0, idx.1 + inc.1);
-
-    if idx.1 == asm.len() {
-      break
-    }
+    try!(disassemble_op(asm, opcodes, &mut wtr, routines, &nwtypes));
   }
 
   Ok(())

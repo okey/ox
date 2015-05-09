@@ -22,3 +22,15 @@ macro_rules! println_err(
       Ok(_) => {},
       Err(x) => panic!("Unable to write to stderr: {}", x),
     }));
+
+macro_rules! read_exact {
+  ($rdr:ident, $arr:expr, $n:expr) => {
+    {
+      let _sz = try!($rdr.read($arr));
+      if _sz != $n {
+        let msg = format!("Unexpected EOF: got {} bytes but expected {}", _sz, $n);
+        return Err(CommandStreamError(DecodeError{message: msg.to_string(), byte: 0}))
+      }
+    }
+  }
+}

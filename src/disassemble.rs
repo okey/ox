@@ -34,7 +34,6 @@ pub type DisassemblyResult = Result<(), DisassemblyError>;
 
 pub fn format_output<'a, T: Write>(wtr: &mut T,
                                    payload: &'a OpPayload,
-                                   opcodes: &'a [Option<Opcode>],
                                    routines: &HashMap<u16, Routine>,
                                    nwtypes: &[Option<NWType>],
                                    pad_str: &String,
@@ -270,7 +269,7 @@ pub fn disassemble<S: BufRead>(asm: &mut S,
                                   .take(longest_code)
                                   .collect::<Vec<u8>>()
                                   ).unwrap();
-  try!(format_output(&mut wtr, &t, opcodes, routines, &nwtypes, &pad_str));
+  try!(format_output(&mut wtr, &t, routines, &nwtypes, &pad_str));
 
 
 
@@ -278,11 +277,12 @@ pub fn disassemble<S: BufRead>(asm: &mut S,
   // TODO allow user to specify tabs or spaces
 
   /* Start parsing the command stream */
-  // TODO handle special cases like SAVE_STATE
+  // TODO handle special cases for STORE_STATE and co. to ensure they are followed by a JMP
+  // and a block of code (block = RTN bounded)
   loop {
     let c = try!(disassemble_op(asm, opcodes, bytes_read));
     bytes_read += c.bytes_read;// TODO rename start
-    try!(format_output(&mut wtr, &c, opcodes, routines, &nwtypes, &pad_str));
+    try!(format_output(&mut wtr, &c, routines, &nwtypes, &pad_str));
     if bytes_read == expected_len {
       break;
     } else if bytes_read > expected_len {

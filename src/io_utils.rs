@@ -28,6 +28,7 @@ pub fn read_as_string(path: &String) -> io::Result<String> {
 
 pub fn bytes_to_uint(data: &[u8]) -> Result<u32, DisassemblyError> {
   match data.len() {
+    1 => Ok(data[0] as u32),
     2 => Ok(Cursor::new(data).read_u16::<BigEndian>().unwrap() as u32),
     4 => Ok(Cursor::new(data).read_u32::<BigEndian>().unwrap()),
     _ => {
@@ -40,7 +41,7 @@ pub fn bytes_to_uint(data: &[u8]) -> Result<u32, DisassemblyError> {
 
 pub fn bytes_to_int(data: &[u8]) -> Result<i32, DisassemblyError> {
   match data.len() {
-    1 => Ok(data[0] as i32),
+    //1 => Ok(data[0] as i32),
     2 => Ok(Cursor::new(data).read_i16::<BigEndian>().unwrap() as i32),
     4 => Ok(Cursor::new(data).read_i32::<BigEndian>().unwrap()),
     _ => {

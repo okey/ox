@@ -7,6 +7,7 @@
 #![feature(collections)] // peg warnings
 #![plugin(docopt_macros)]
 #![feature(convert)]
+#![feature(core)]
 extern crate rustc_serialize;
 extern crate docopt;
 extern crate byteorder;
@@ -26,6 +27,7 @@ mod assemble;
 
 use io_utils::read_as_string;
 use disassemble::{disassemble, DisassemblyError};
+use assemble::AssemblyError;
 
 peg_file! nwscript("nwscript.rustpeg");
 use nwscript::document;
@@ -111,6 +113,8 @@ Options:
 
 // -c is poorly named, and -d and --define are easily confused. TODO fix this.
 
+// TODO config via config struct???
+
 fn main() {
   let args:Args = Args::docopt()
     .decode()
@@ -138,27 +142,33 @@ fn main() {
 
   // Assemble
   if args.flag_a.len() > 0 {
+    let asm_path = &args.flag_a;
+    let output_path = if "" == args.flag_output { None } else { Some(&args.flag_output) };
 
-    println!("Assembling not yet implemented!");
-
-    //let rdr = std::io::BufReader::new(std::io::stdin());
-    let test_file = "fubar.txt";
-    let rdr = std::io::BufReader::new(match File::open(&test_file){
+    let rdr = std::io::BufReader::new(match File::open(asm_path){
       Ok(f) => f,
-      Err(reason) => panic!("Opening {} failed: {}", &test_file, Error::description(&reason))
+      Err(reason) => panic!("Opening {} failed: {}", asm_path, Error::description(&reason))
     });
 
     if doc.is_some() {
       let (_, routines) = build_tables(doc.unwrap());
 
-      match assemble::assemble(rdr, &opcodes, Some(&routines), None) {
-        Ok(_) => println!("Assembly complete, defs"),
-        Err(reason) => panic!("Assembly failed: {}", Error::description(&reason))
+      match assemble::assemble(rdr, &opcodes, Some(&routines), output_path) {
+        Ok(_) => println!("Assembly complete, no defs"),
+        Err(e) => match e {
+          AssemblyError::ParseError(m) => panic!("Assembly failed: {}", m),
+          AssemblyError::IOError(e) => panic!("Assembly failed: {}", e),
+          // TODO fix I/O error handling
+        }
       }
     } else {
-      match assemble::assemble(rdr, &opcodes, None, None) {
+      match assemble::assemble(rdr, &opcodes, None, output_path) {
         Ok(_) => println!("Assembly complete, no defs"),
-        Err(reason) => panic!("Assembly failed: {}", Error::description(&reason))
+        Err(e) => match e {
+          AssemblyError::ParseError(m) => panic!("Assembly failed: {}", m),
+          AssemblyError::IOError(e) => panic!("Assembly failed: {}", e),
+          // TODO fix I/O error handling
+        }
       }
     }
 
@@ -167,18 +177,14 @@ fn main() {
 
   // Disassemble
   if args.flag_d.len() > 0 {
+    // TODO output path
 
     // Build tables
     let (constants, routines) = build_tables(doc.unwrap());
-    println!("Read {} constants and {} routines", constants.len(), routines.len());
+    println!(";;Read {} constants and {} routines", constants.len(), routines.len());
 
     // Read the compiled file
     let asm_path = &args.flag_d; // TODO stream this instead
-
-    /*let asm = match read_as_bytes(asm_path) {
-      Err(e) => panic!("{}", e),
-      Ok(b) => b
-    };*/
     let mut rdr = std::io::BufReader::new(match File::open(&asm_path){
       Ok(f) => f,
       Err(reason) => panic!("Opening {} failed: {}", &asm_path, Error::description(&reason))

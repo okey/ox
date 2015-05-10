@@ -29,6 +29,8 @@ impl From<io::Error> for DisassemblyError {
 // NOTE constraints between types and opcodes not really enforced, let alone strongly
 // TODO redesign to fix this and make opcodes contingent upon types or something
 
+// TODO what happens to control characters in strings? are they automatically escaped?
+
 use self::DisassemblyError::OpStreamError;
 pub type DisassemblyResult = Result<(), DisassemblyError>;
 
@@ -43,7 +45,7 @@ pub fn format_output<'a, T: Write>(wtr: &mut T,
   let longest_code = pad_str.len();
   let pad = longest_code - op.fmt.len();
 
-  // print the opcode and determine whether or not to printing the type byte
+  // print the opcode and flag whether or not the type byte was printed
   let mut skip_type = match payload._type {
     Some(byte) => match nwtypes.get(byte as usize).and_then(|t| t.as_ref()) {
       Some(typename) => match typename.abbr {
@@ -59,14 +61,21 @@ pub fn format_output<'a, T: Write>(wtr: &mut T,
               output!(wtr, "{}{}{}", op.fmt, abbr, &pad_str[0..abbr_pad]); true }
           }
         },
-        None => { output!(wtr, "{}{}{:#04X}", op.fmt, &pad_str[0..pad], byte); false }
+        None => match op.types {
+          Some(ref types) if 2 > types.len() => {
+            let pad = if payload.args.len() > 0 { pad } else { 0 };
+            output!(wtr, "{}{}", op.fmt, &pad_str[0..pad]);
+            true
+          },
+          _ => { output!(wtr, "{}{}{:#04X}", op.fmt, &pad_str[0..pad], byte); false }
+        }
       },
       None => { op_err!(0, "Undocumented type {} for opcode {}", byte, op.fmt); },
     },
     None => { output!(wtr, "{}{}", op.fmt, &pad_str[0..pad]); false } // T
   };
 
-  for pair in &payload.args {
+  for (n, pair) in payload.args.iter().enumerate() {
     let sep = if skip_type { "" } else { &pad_str[0..5] };
     let arg = &pair.0;
     let bytes = &pair.1;
@@ -75,6 +84,14 @@ pub fn format_output<'a, T: Write>(wtr: &mut T,
         let num = try!(bytes_to_uint(bytes.as_slice()));
         match **arg { // wish we had fallthrough because nesting this sucks :S
           Operand::Size(..) => {
+            match payload.args.get(n + 1) {
+              Some(p) => match *p.0 {
+                Operand::String => continue, // don't print the size before a string
+                _ => ()
+              },
+              _ => ()
+            }
+
             if op.types.is_none() {
               output!(wtr, "{:#010X}", num) // T - TODO this is horrific, clean it up
             } else {
@@ -86,13 +103,17 @@ pub fn format_output<'a, T: Write>(wtr: &mut T,
             if let Some(f) = routines.get(&id) {
               output!(wtr, "{}{}#{:#X}", sep, f.name, num)
             } else {
-              output!(wtr, "{}???#{}", sep, num)
+              output!(wtr, "{}???#{:#X}", sep, num)
             }
           },
           _ => output!(wtr, "{}{:#X}", sep, num)
         };
       },
-      Operand::Offset(..) | Operand::Integer(..) | Operand::ArgCount(..) => {
+      Operand::ArgCount(..) => {
+        let num = try!(bytes_to_uint(bytes.as_slice()));
+        output!(wtr, "{}{}", sep, num);
+      },
+      Operand::Offset(..) | Operand::Integer(..) => {
         let num = try!(bytes_to_int(bytes.as_slice()));
         match **arg { // wish we had fallthrough because nesting this sucks :S
           Operand::Offset(..) => output!(wtr, "{}@{}", sep, num),

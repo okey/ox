@@ -12,6 +12,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 //use std::string::String;
 
 use std::str::FromStr;
+use std::error::Error;
 
 use super::Routine;
 use opcodes::{Opcode, NWType, get_nwtypes, Operand};

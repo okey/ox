@@ -8,6 +8,7 @@
 #![plugin(docopt_macros)]
 #![feature(convert)]
 #![feature(core)]
+#![feature(vec_push_all)]
 extern crate rustc_serialize;
 extern crate docopt;
 extern crate byteorder;
@@ -96,7 +97,7 @@ fn build_tables(list: Vec<Statement>) -> (HashMap<String, Constant>, HashMap<u16
 }
 
 docopt!(Args derive Debug, "
-Usage: ox -d <input.ncs> -c <def.ldf> [--nwn] [-o <output.oxa>]
+Usage: ox -d <input.ncs> -c <def.ldf> [--nwn] [-o <output.ox>]
        ox -a <input.oxa> [-c <def.ldf> [--nwn]] [-o <output.ncs>]
        ox --help
 

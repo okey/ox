@@ -442,7 +442,8 @@ pub fn assemble<T: BufRead>(input: T,
               // TT supports all the engine types but they're allowed individually too? ????
               match variant_type.abbr {
                 Some(a) => {
-                  let mut variant_name = String::from_str(&o.fmt);
+                  // TODO FIXME use try! instead???
+                  let mut variant_name = String::from_str(&o.fmt).unwrap();
                   variant_name.push_str(a);
 
                   variant_opcodes.insert(variant_name, (&o, Some(variant_type)));

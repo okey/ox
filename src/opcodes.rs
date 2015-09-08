@@ -1,8 +1,53 @@
 use std::iter::repeat;
-use std::collections::HashMap;
+use std::collections::{HashMap,HashSet};
 
 use self::Operand::*;
 
+
+//This would be an improvement on the current Option soup
+
+enum OpcodeE {
+  CPDOWNSP=0x01,
+  RSAA=0x02,
+  //...
+}
+
+struct Opcode2 {
+  code: OpcodeE,
+  name: &'static str,
+  operand: Operand2,
+}
+
+enum STypeE {
+  Integer=0x03,
+  Float=0x04,
+}
+
+struct STypecode {
+  code: STypeE,
+  abbr: Option<&'static str>,
+}
+
+enum Operand2 {
+  STypeList(HashSet<STypeE>), // Or use a Set, maybe ;)
+  ArgSeq(Vec<Operand>), // empty vec! can be used instead of None
+  // iterate the keys instead of using a separate list?
+  // direct lookup will still be faster than key iteration though... which means
+  // unwrapping :S
+  STypeArgSeqMap(HashMap<STypeE, Vec<Operand>>),
+}
+
+/*
+// This still doesn't force mapping from code->type and code,type->argseq
+enum TT {
+  Foo=0x01,
+  Bar=0x02,
+}
+
+enum QQ {
+  X(TT, Vec<u8>),
+  Y(Vec<Operand>)
+}*/
 
 #[derive(Debug)]
 pub struct Opcode {

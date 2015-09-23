@@ -72,7 +72,7 @@ type -> String
 
 #[pub]
 type_name -> String
-  = ("int" / "float" / "string" / "void"
+  = ("ref" sep)? ("int" / "float" / "string" / "void"
   / "any" / "command" / "effect" / "event" / "itemproperty" / "location"
   / "object" / "player" / "resource" / "vector") (osep "[]")?
   { match_str.to_string() }
@@ -87,8 +87,8 @@ term
   = ";"
 
 sep -> String
-  = [ \n\t]+ line_comment* { match_str.to_string() }
-  / line_comment+ [ \n\t]* { match_str.to_string() }
+  = [ \t\n\r]+ line_comment* { match_str.to_string() }
+  / line_comment+ [ \t\n\r]* { match_str.to_string() }
 
 osep
   = sep*

@@ -8,7 +8,7 @@ use std::iter::repeat;
 use std::string::String;
 
 use super::Routine;
-use opcodes::{Opcode, Operand, NWType, get_nwtypes, OpPayload};
+use opcodes::{Opcode, Operand, NWType, get_nwtypes, OpPayload, OpcodeE};
 use io_utils::{bytes_to_uint, bytes_to_int, bytes_to_float};
 
 
@@ -41,9 +41,11 @@ pub fn format_output<'a, T: Write>(wtr: &mut T,
                                    pad_str: &String,
                                    ) -> Result<(), DisassemblyError>
 {
+  // This could be so much cleaner with the appropriate payload struct and Show trait
   let op = payload.op;
+  let op_name = payload.op.code.to_string();
   let longest_code = pad_str.len();
-  let pad = longest_code - op.fmt.len();
+  let pad = longest_code - op_name.len();
 
   // print the opcode and flag whether or not the type byte was printed
   let mut skip_type = match payload._type {
@@ -54,25 +56,25 @@ pub fn format_output<'a, T: Write>(wtr: &mut T,
           match op.types {
             Some(ref types) if 2 > types.len() => {
               let pad = if n_args > 0 { pad } else { 0 };
-              output!(wtr, "{}{}", op.fmt, &pad_str[0..pad]); false
+              output!(wtr, "{}{}", op_name, &pad_str[0..pad]); false
             },
             _ => {
               let abbr_pad = if pad >= abbr.len() && n_args > 0 { pad - abbr.len() } else { 0 };
-              output!(wtr, "{}{}{}", op.fmt, abbr, &pad_str[0..abbr_pad]); true }
+              output!(wtr, "{}{}{}", op_name, abbr, &pad_str[0..abbr_pad]); true }
           }
         },
         None => match op.types {
           Some(ref types) if 2 > types.len() => {
             let pad = if payload.args.len() > 0 { pad } else { 0 };
-            output!(wtr, "{}{}", op.fmt, &pad_str[0..pad]);
+            output!(wtr, "{}{}", op_name, &pad_str[0..pad]);
             true
           },
-          _ => { output!(wtr, "{}{}{:#04X}", op.fmt, &pad_str[0..pad], byte); false }
+          _ => { output!(wtr, "{}{}{:#04X}", op_name, &pad_str[0..pad], byte); false }
         }
       },
-      None => { op_err!(0, "Undocumented type {} for opcode {}", byte, op.fmt); },
+      None => { op_err!(0, "Undocumented type {} for opcode {}", byte, op_name); },
     },
-    None => { output!(wtr, "{}{}", op.fmt, &pad_str[0..pad]); false } // T
+    None => { output!(wtr, "{}{}", op_name, &pad_str[0..pad]); false } // T
   };
 
   for (n, pair) in payload.args.iter().enumerate() {
@@ -164,7 +166,8 @@ pub fn disassemble_op<'a, T: Read>(asm: &mut T,
         byte_buf[0]
       } else {
         op_err!(byte_count + payload.bytes_read,
-                "Type {:#04X} not in list of legal types for opcode {}", byte_buf[0], op.fmt);
+                "Type {:#04X} not in list of legal types for opcode {}",
+                byte_buf[0], payload.op.code);
       }
     },
     None => 0x00 // Hack for T
@@ -257,7 +260,7 @@ pub fn disassemble<S: BufRead>(asm: &mut S,
   bytes_read += t.bytes_read;
 
   match t.op.code {
-    0x42 => (),
+    OpcodeE::T => (),
     _ => {
       op_err!(t.bytes_read, "Unexpected opcode {:#04X}, expected T (0x42)", t.op.code);
     }
@@ -266,7 +269,8 @@ pub fn disassemble<S: BufRead>(asm: &mut S,
   // Find the longest combination of opcode + type abbr (using only types legal for each op)
   let longest_code = opcodes.iter()
     .filter_map(|c| match *c {
-      Some(ref c) => Some(c.fmt.len() + match c.types {
+      // a bit inefficient calling tostring() repeatedly :S
+      Some(ref c) => Some(c.code.to_string().len() + match c.types {
         Some(ref t) => {
           t.iter()
             .filter_map(|t| nwtypes.get(*t as usize))

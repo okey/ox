@@ -15,7 +15,7 @@ use std::str::FromStr;
 use std::error::Error;
 
 use super::Routine;
-use opcodes::{Opcode, NWType, get_nwtypes, Operand};
+use opcodes::{Opcode, NWType, get_nwtypes, Operand, OpcodeE, NWTypeE};
 
 #[derive(Debug)]
 pub enum AssemblyError {
@@ -53,7 +53,7 @@ impl From<byteorder::Error> for AssemblyError {
 
 pub type AssemblyResult = Result<(), AssemblyError>;
 
-type OpcodeMap<'a> = HashMap<&'a str, &'a Opcode>;
+type OpcodeMap<'a> = HashMap<String, &'a Opcode>;
 type VariantMap<'a> = HashMap<String, (&'a Opcode, Option<&'a NWType>)>;
 type RoutineMap<'a> = HashMap<&'a String, &'a Routine>;
 
@@ -256,7 +256,7 @@ fn assemble_line<T: Write>(line: &String,
   /*if parts.len() == 1 {
     return Err(AssemblyError::ParseError(format!("Illegal line: {}", line).to_string()));
   }*/
-  let name = parts[0];
+  let name = &String::from(parts[0]); // TODO replace with .into_string()
   let mut tokens = 1;
   //println!("{:?}", parts);
 
@@ -265,7 +265,7 @@ fn assemble_line<T: Write>(line: &String,
       let &(op, maybe_t) = vo;
       match maybe_t {
         // regular variant, type known from variant name
-        Some(t) => { (op, Some(t.code)) },
+        Some(t) => { (op, Some(t.code as u8)) },
         // irregular variant, type requires additional specifier
         None if parts.len() > 1 => match op.types {
           Some(ref optypes) => match optypes.get(try!(u8::from_str(parts[1])) as usize) {
@@ -274,7 +274,7 @@ fn assemble_line<T: Write>(line: &String,
               (op, Some(*tt))
             },
             None => {
-              let e = format!("Opcode {} with illegal or unknown type specifier", op.fmt);
+              let e = format!("Opcode {} with illegal or unknown type specifier", op.code);
               return Err(AssemblyError::ParseError(e.to_string()));
             }
           },
@@ -283,12 +283,12 @@ fn assemble_line<T: Write>(line: &String,
         },
         // No name variant and no explicit type, so fail
         None => {
-          let e = format!("Opcode with no type specifier: {}", op.fmt);
+          let e = format!("Opcode with no type specifier: {}", op.code);
           return Err(AssemblyError::ParseError(e.to_string()));
         }
       }
     },
-    //1 => { try!(output.write(format!("RMATCH {} {}\n", op.fmt, op.types[0]).as_bytes())); },
+    //1 => { try!(output.write(format!("RMATCH {} {}\n", op.code, op.types[0]).as_bytes())); },
     None => {
       match opcodes.get(name) {
         // standard opcode, type known from name and or code
@@ -300,7 +300,7 @@ fn assemble_line<T: Write>(line: &String,
                 0 => (*op, None),
                 1 => (*op, Some(types[0])),
                 _ => { // ambiguous
-                  let msg = format!("Opcode definition error: {} has more than one type", op.fmt);
+                  let msg = format!("Opcode definition error: {} has more than one type", op.code);
                   return Err(AssemblyError::IOError(io::Error::new(ErrorKind::InvalidInput, msg)))
                 }
               }
@@ -320,10 +320,10 @@ fn assemble_line<T: Write>(line: &String,
     None => "     ".to_string(),
     Some(b) => format!("{:#04X} ", b)
   };
-  print!("{:#04X} ({})\t{}({:?})", op.code, op.fmt, real_t, t_byte);
+  print!("{:#04X} ({})\t{}({:?})", op.code, op.code, real_t, t_byte);
 
   let mut buf = vec!();
-  try!(buf.write_u8(op.code));
+  try!(buf.write_u8(op.code as u8));
   match t_byte {
     None => (),
     //None => try!(output.write_u32::<BigEndian>(num));))
@@ -354,11 +354,11 @@ fn assemble_line<T: Write>(line: &String,
         },
         None => {
           // Not sure if this is actually an error... but there are no opcodes that trigger this
-          let e_str = format!("Opcode {} has no arguments for type {:#04X}", op.fmt, t_byte);
+          let e_str = format!("Opcode {} has no arguments for type {:#04X}", op.code, t_byte);
           return Err(AssemblyError::IOError(io::Error::new(ErrorKind::InvalidInput, e_str)))
         }
       },
-      None => if op.code == 0x42 { // hack for T
+      None => if op.code == OpcodeE::T { // hack for T
         args.get(&(0x00 as u8)).unwrap().iter().map(|c| c).collect()
       } else {
         println!("");
@@ -372,7 +372,7 @@ fn assemble_line<T: Write>(line: &String,
   };
 
   if args.len() + tokens != parts.len() {
-    let e_str = format!("Opcode {} expects {} args, got {}", op.fmt, args.len(),
+    let e_str = format!("Opcode {} expects {} args, got {}", op.code, args.len(),
                         parts.len() - tokens);
     return Err(AssemblyError::ParseError(e_str))
   }
@@ -425,7 +425,7 @@ pub fn assemble<T: BufRead>(input: T,
   for op in opcodes {
     match op {
       &Some(ref o) => {
-        reverse_opcodes.insert(&o.fmt, &o);
+        reverse_opcodes.insert(o.code.to_string(), &o);
 
         match o.types {
           Some(ref types) if types.len() > 1 => {
@@ -433,7 +433,7 @@ pub fn assemble<T: BufRead>(input: T,
               let variant_type = match nwtypes.get(*t as usize).and_then(|c| c.as_ref()) {
                 Some(t) => t,
                 None => {
-                  let e_str = format!("Variant type {} not found for opcode {}", t, o.fmt);
+                  let e_str = format!("Variant type {} not found for opcode {}", t, o.code);
                   return Err(AssemblyError::IOError(io::Error::new(ErrorKind::NotFound, e_str)))
                 }
               };
@@ -443,12 +443,12 @@ pub fn assemble<T: BufRead>(input: T,
               match variant_type.abbr {
                 Some(a) => {
                   // TODO FIXME use try! instead???
-                  let mut variant_name = String::from_str(&o.fmt).unwrap();
+                  let mut variant_name = o.code.to_string();
                   variant_name.push_str(a);
 
                   variant_opcodes.insert(variant_name, (&o, Some(variant_type)));
                 },
-                None => { variant_opcodes.insert(o.fmt.to_string(), (&o, None)); }
+                None => { variant_opcodes.insert(o.code.to_string(), (&o, None)); }
               };
             }
           },

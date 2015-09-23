@@ -1,13 +1,11 @@
 #![feature(plugin)]
 #![feature(trace_macros)]
 #![plugin(peg_syntax_ext)]
-#![feature(str_char)]
 #![feature(box_syntax)]
 //#![feature(exit_status)]
-#![feature(collections)] // peg warnings
+//#![feature(collections)] // peg warnings
 #![plugin(docopt_macros)]
 #![feature(convert)]
-#![feature(core)]
 #![feature(vec_push_all)]
 extern crate rustc_serialize;
 extern crate docopt;
@@ -98,7 +96,7 @@ fn build_tables(list: Vec<Statement>) -> (HashMap<String, Constant>, HashMap<u16
 
 docopt!(Args derive Debug, "
 Usage: ox -d <input.ncs> -c <def.ldf> [--nwn] [-o <output.ox>]
-       ox -a <input.oxa> [-c <def.ldf> [--nwn]] [-o <output.ncs>]
+       ox -a <input.ox> [-c <def.ldf> [--nwn]] [-o <output.ncs>]
        ox --help
 
 Options:

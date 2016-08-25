@@ -4,6 +4,8 @@ name = "ox"
 version = "0.0.1"
 authors = ["okey <oscar.c.key@gmail.com>"]
 
+include = ["Cargo.toml", "src/**/*.rs", "src/**/*.rustpeg"]
+
 [dependencies]
 peg = "*"
 byteorder = "*"

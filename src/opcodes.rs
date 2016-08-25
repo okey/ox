@@ -90,6 +90,8 @@ pub enum Operand {
   ArgCount(usize),
 }
 
+// TODO output start-of-opcode byte indices
+// TODO output some info about jump targets
 pub struct OpPayload<'a > {
   pub bytes_read: usize,
   pub op: &'a Opcode,

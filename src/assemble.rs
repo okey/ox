@@ -41,16 +41,6 @@ impl From<num::ParseFloatError> for AssemblyError {
   }
 }
 
-impl From<byteorder::Error> for AssemblyError {
-  fn from(e: byteorder::Error) -> Self {
-    let msg = match e {
-      byteorder::Error::UnexpectedEOF => "Unexpected EOF",
-      byteorder::Error::Io(error) => { return AssemblyError::from(error); }
-    };
-    AssemblyError::ParseError(msg.to_string())
-  }
-}
-
 pub type AssemblyResult = Result<(), AssemblyError>;
 
 type OpcodeMap<'a> = HashMap<String, &'a Opcode>;
@@ -132,7 +122,7 @@ fn parse_arg(o: &Operand, s: &str, routines: &RoutineMap) -> Result<Vec<u8>, Ass
   let mut buf = vec!();
   match *o {
     Operand::Object(sz) | Operand::Size(sz) => {
-      buf.push_all(try!(uint_str_to_bytes(sz, Some("0x"), 16, s)).as_slice());
+      buf.extend(try!(uint_str_to_bytes(sz, Some("0x"), 16, s)));
       /*
       let offset = if s.starts_with("0x") { 2 } else { 0 }; // TODO handle prefixes properly
       let num = try!(u32::from_str_radix(&s[offset..], 16)); // TODO variable size
@@ -158,36 +148,36 @@ fn parse_arg(o: &Operand, s: &str, routines: &RoutineMap) -> Result<Vec<u8>, Ass
         let num = try!(u32::from_str_radix(&explicit[offset..], 16));
         print!(" # {:#X}", num);
         try!(buf.write_u32::<BigEndian>(num));*/
-        buf.push_all(try!(uint_str_to_bytes(sz, Some("0x"), 16, explicit)).as_slice());
+        buf.extend(try!(uint_str_to_bytes(sz, Some("0x"), 16, explicit)));
       } // TODO fail if len > 2
     },
     Operand::ArgCount(sz) => {
-      buf.push_all(try!(uint_str_to_bytes(sz, None, 10, s)).as_slice());
+      buf.extend(try!(uint_str_to_bytes(sz, None, 10, s)));
     },
     Operand::Offset(sz) => {
       /*let offset = if s.starts_with("@") { 1 } else { 0 };
       let num = try!(i32::from_str(&s[offset..]));
       print!(" @{}", num);
       try!(buf.write_i32::<BigEndian>(num));*/
-      buf.push_all(try!(int_str_to_bytes(sz, Some("@"), 10, s)).as_slice());
+      buf.extend(try!(int_str_to_bytes(sz, Some("@"), 10, s)));
     },
     Operand::Integer(sz)  => {
       /*let num = try!(i32::from_str(s));
       print!(" {}", num);
       try!(buf.write_i32::<BigEndian>(num));*/
-      buf.push_all(try!(int_str_to_bytes(sz, None, 10, s)).as_slice());
+      buf.extend(try!(int_str_to_bytes(sz, None, 10, s)));
     },
     Operand::Float(sz) => {
       /*let num = try!(f32::from_str(s));
       print!(" {}", num);
       try!(buf.write_f32::<BigEndian>(num));*/
-      buf.push_all(try!(float_str_to_bytes(sz, s)).as_slice());
+      buf.extend(try!(float_str_to_bytes(sz, s)));
     },
     Operand::String => {
       let len = s.len() - 2; // TODO clean up this
       print!(" {:#04X} {}", len, &s[1..s.len()-1]); // TODO process escape characters
       try!(buf.write_u16::<BigEndian>(len as u16));
-      buf.push_all(s[1..s.len()-1].as_bytes())
+      buf.extend(s[1..s.len()-1].as_bytes())
     },
   }
   Ok(buf)

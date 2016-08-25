@@ -5,6 +5,8 @@ version = "0.0.1"
 authors = ["okey <oscar.c.key@gmail.com>"]
 
 include = ["Cargo.toml", "src/**/*.rs", "src/**/*.rustpeg"]
+license = "MIT"
+description = "An NWScript bytecode disassembler."
 
 [dependencies]
 peg = "0.3.14"

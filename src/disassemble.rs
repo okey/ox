@@ -240,7 +240,7 @@ pub fn disassemble_op<'a, T: Read>(asm: &mut T,
 pub fn disassemble<S: BufRead>(asm: &mut S,
                                opcodes: &[Option<Opcode>],
                                routines: &HashMap<u16, Routine>,
-                               output_name: Option<String>
+                               output_name: Option<&String>
                                ) -> Result<(), DisassemblyError> {
 
   let nwtypes = get_nwtypes();

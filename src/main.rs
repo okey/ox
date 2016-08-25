@@ -5,8 +5,6 @@
 //#![feature(exit_status)]
 //#![feature(collections)] // peg warnings
 #![plugin(docopt_macros)]
-#![feature(convert)]
-#![feature(vec_push_all)]
 extern crate rustc_serialize;
 extern crate docopt;
 extern crate byteorder;
@@ -176,10 +174,11 @@ fn main() {
 
   // Disassemble
   if args.flag_d.len() > 0 {
-    // TODO output path
+    let output_path = if "" == args.flag_output { None } else { Some(&args.flag_output) };
 
     // Build tables
     let (constants, routines) = build_tables(doc.unwrap());
+    // TODO stick this at the front of the writer? pass the writer in to fn instead?
     println!(";;Read {} constants and {} routines", constants.len(), routines.len());
 
     // Read the compiled file
@@ -189,7 +188,7 @@ fn main() {
       Err(reason) => panic!("Opening {} failed: {}", &asm_path, Error::description(&reason))
     });
 
-    match disassemble(&mut rdr, &opcodes, &routines, None) {
+    match disassemble(&mut rdr, &opcodes, &routines, output_path) {
       Ok(_) => (),
       Err(e) => match e {
         DisassemblyError::OpStreamError(m, b) => panic!("Disassembly failed: {} (byte {})", m, b),

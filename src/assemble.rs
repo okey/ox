@@ -401,8 +401,8 @@ pub fn assemble<T: BufRead>(input: T,
                             output_name: Option<&String>) -> AssemblyResult {
 
   let mut wtr = BufWriter::new(match output_name {
-    Some(path) => box try!(File::create(path)) as Box<Write>,
-    None => box std::io::stdout() as Box<Write>
+    Some(path) => Box::new(try!(File::create(path))) as Box<Write>,
+    None => Box::new(std::io::stdout()) as Box<Write>
   });
 
   // TODO don't pass output_name as an Option? Generate from input name in main if not given

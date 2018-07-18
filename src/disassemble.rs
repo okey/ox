@@ -245,8 +245,8 @@ pub fn disassemble<S: BufRead>(asm: &mut S,
 
   let nwtypes = get_nwtypes();
   let mut wtr = BufWriter::new(match output_name {
-    Some(path) => box try!(File::create(path)) as Box<Write>,
-    None => box std::io::stdout() as Box<Write>
+    Some(path) => Box::new(try!(File::create(path))) as Box<Write>,
+    None => Box::new(std::io::stdout())  as Box<Write>
   });
 
   // The first HEADER_BYTES bytes should be a header string

@@ -52,11 +52,11 @@ literal -> String
 // TODO consider extracting mixed array types?
 // What about, say, char or string arrays????
 arr_literal -> String
-  = "[" osep ((wrap_real / wrap_integer) ** (osep "," osep)) "]" { match_str.to_string() }
+  = a:$("[" osep ((wrap_real / wrap_integer) ** (osep "," osep)) "]") { a.to_string() }
 
 // either stop caring about this for constants and check in post, or figure out how to check existing constants
 hack_const -> String
-  = ("TRUE" / "FALSE") { match_str.to_string() }
+  = s:$("TRUE" / "FALSE") { s.to_string() }
 
 varlist -> Vec<RoutineArg>
   = arg ** (osep "," osep)
@@ -68,17 +68,17 @@ varget -> String
   = osep get osep v:literal { v.to_string() }
 
 type -> String
-  = osep s:type_name sep { match_str.parse().unwrap() }
+  = osep s:type_name sep { s.parse().unwrap() } //maybe should include seps?
 
 #[pub]
 type_name -> String
-  = ("ref" sep)? ("int" / "float" / "string" / "void"
+  = s:$(("ref" sep)? ("int" / "float" / "string" / "void"
   / "any" / "command" / "effect" / "event" / "itemproperty" / "location"
-  / "object" / "player" / "resource" / "vector") (osep "[]")?
-  { match_str.to_string() }
+  / "object" / "player" / "resource" / "vector") (osep "[]")?)
+  { s.to_string() }
 
 name -> String
-  = [a-zA-Z_]+[a-zA-Z_0-9]* { match_str.to_string() }
+  = s:$([a-zA-Z_]+[a-zA-Z_0-9]*) { s.to_string() }
 
 get
   = "="
@@ -87,36 +87,36 @@ term
   = ";"
 
 sep -> String
-  = [ \t\n\r]+ line_comment* { match_str.to_string() }
-  / line_comment+ [ \t\n\r]* { match_str.to_string() }
+  = s:$([ \t\n\r]+ line_comment*) { s.to_string() }
+  / t:$(line_comment+ [ \t\n\r]*) { t.to_string() }
 
 osep
   = sep*
 
 #[pub]
 define -> String
-  = "#define" " "+ [^\n]+ "\n" { match_str.to_string() }
+  = s:$("#define" " "+ [^\n]+ "\n") { s.to_string() }
 
 #[pub]
 line_comment -> String
-  = "//" [^\n]* "\n" { match_str.to_string() }
+  = s:$("//" [^\n]* "\n") { s.to_string() }
 
 #[pub]
 block_comment -> String
-  = "/*" (!"*/" .)* "*/" { match_str.to_string() }
+  = s:$("/*" (!"*/" .)* "*/") { s.to_string() }
 
 // this is silly, maybe should have str_int or something instead of conversions
 wrap_integer -> String
   = z:integer { z.to_string() }
 
 integer -> i64
-  = "-"? [0-9]+ { match_str.parse().unwrap() }
+  = n:$("-"? [0-9]+) { n.parse().unwrap() }
 
 uinteger -> u64
-  = [0-9]+ { match_str.parse().unwrap() }
+  = n:$([0-9]+) { n.parse().unwrap() }
 
 ushort -> u16
-  = [0-9]+ { match_str.parse().unwrap() }
+  = n:$([0-9]+) { n.parse().unwrap() }
 
 // this is sillier than silly
 wrap_real -> String
@@ -126,11 +126,10 @@ real -> f64
   = f:float_nosuffix "f"? { f.parse().unwrap() }
 
 float_nosuffix -> String
-  = "-"? [0-9]+ "." [0-9]* { match_str.to_string() }
-
+  = f:$("-"? [0-9]+ "." [0-9]*) { f.to_string() }
 
 string -> String
   = "R"? s:plain_string { s }
 
 plain_string -> String
-  = "\"" [^"]* "\"" { match_str.to_string() }
+  = s:$("\"" [^"]* "\"") { s.to_string() }

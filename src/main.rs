@@ -1,13 +1,7 @@
-#![feature(plugin)]
-#![feature(trace_macros)]
-#![plugin(peg_syntax_ext)]
-#![feature(box_syntax)]
-//#![feature(exit_status)]
-//#![feature(collections)] // peg warnings
-#![plugin(docopt_macros)]
-extern crate rustc_serialize;
 extern crate docopt;
 extern crate byteorder;
+#[macro_use]
+extern crate serde_derive;
 
 
 use std::collections::HashMap;
@@ -21,12 +15,14 @@ mod opcodes;
 mod io_utils;
 mod disassemble;
 mod assemble;
+mod nwscript {
+    include!(concat!(env!("OUT_DIR"), "/nwscript.rs"));
+}
 
+use docopt::Docopt;
 use io_utils::read_as_string;
 use disassemble::{disassemble, DisassemblyError};
 use assemble::AssemblyError;
-
-peg_file! nwscript("nwscript.rustpeg");
 use nwscript::document;
 
 
@@ -92,7 +88,7 @@ fn build_tables(list: Vec<Statement>) -> (HashMap<String, Constant>, HashMap<u16
   return (constants, commands)
 }
 
-docopt!(Args derive Debug, "
+const USAGE: &'static str = "
 Usage: ox -d <input.ncs> -c <def.ldf> [--nwn] [-o <output.ox>]
        ox -a <input.ox> [-c <def.ldf> [--nwn]] [-o <output.ncs>]
        ox --help
@@ -105,7 +101,17 @@ Options:
   --nwn                   Expect NWN-style routine definitions.
   -o, --output OUTPUT     The file to write output to.
   -h, --help              Show this message.
-");
+";
+
+#[derive(Debug, Deserialize)]
+struct Args {
+  flag_d: String,
+  flag_a: String,
+  flag_define: String,
+  flag_output: String,
+  flag_nwn: bool,
+}
+
 // gold-plating: tabs/spaces, hex options, cyclic (-r?) option that is -d then -a or vice versa
 
 // -c is poorly named, and -d and --define are easily confused. TODO fix this.
@@ -113,8 +119,8 @@ Options:
 // TODO config via config struct???
 
 fn main() {
-  let args:Args = Args::docopt()
-    .decode()
+  let args: Args = Docopt::new(USAGE)
+    .and_then(|d| d.deserialize())
     .unwrap_or_else(|e| e.exit());
 
   let opcodes = opcodes::get_opcodes();

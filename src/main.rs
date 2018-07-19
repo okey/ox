@@ -89,13 +89,13 @@ fn build_tables(list: Vec<Statement>) -> (HashMap<String, Constant>, HashMap<u16
 }
 
 const USAGE: &'static str = "
-Usage: ox -d <input.ncs> -c <def.ldf> [--nwn] [-o <output.ox>]
-       ox -a <input.ox> [-c <def.ldf> [--nwn]] [-o <output.ncs>]
+Usage: ox d <input> -c <def.ldf> [--nwn] [-o <output.ox>]
+       ox a <input> [-c <def.ldf> [--nwn]] [-o <output.ncs>]
        ox --help
 
 Options:
-  -a INPUT    Assemble input.oxa file.
-  -d INPUT    Disassemble input.ncs file.
+  d <input.ox>            Disassemble input.ncs file.
+  a <input.ncs>           Assemble input.ox file.
 
   -c, --define DFILE      Engine routine definition file.
   --nwn                   Expect NWN-style routine definitions.
@@ -105,8 +105,9 @@ Options:
 
 #[derive(Debug, Deserialize)]
 struct Args {
-  flag_d: String,
-  flag_a: String,
+  cmd_d: bool,
+  cmd_a: bool,
+  arg_input: String,
   flag_define: String,
   flag_output: String,
   flag_nwn: bool,
@@ -144,8 +145,8 @@ fn main() {
   };
 
   // Assemble
-  if args.flag_a.len() > 0 {
-    let asm_path = &args.flag_a;
+  if args.cmd_a {
+    let asm_path = &args.arg_input;
     let output_path = if "" == args.flag_output { None } else { Some(&args.flag_output) };
 
     let rdr = std::io::BufReader::new(match File::open(asm_path){
@@ -179,7 +180,7 @@ fn main() {
   }
 
   // Disassemble
-  if args.flag_d.len() > 0 {
+  if args.cmd_d {
     let output_path = if "" == args.flag_output { None } else { Some(&args.flag_output) };
 
     // Build tables
@@ -188,7 +189,7 @@ fn main() {
     println!(";;Read {} constants and {} routines", constants.len(), routines.len());
 
     // Read the compiled file
-    let asm_path = &args.flag_d; // TODO stream this instead
+    let asm_path = &args.arg_input; // TODO stream this instead
     let mut rdr = std::io::BufReader::new(match File::open(&asm_path){
       Ok(f) => f,
       Err(reason) => panic!("Opening {} failed: {}", &asm_path, Error::description(&reason))

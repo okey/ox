@@ -298,7 +298,7 @@ pub fn disassemble<S: BufRead>(asm: &mut S,
 
 
 
-  // TODO allow user to specify decgimal or hex output for integers
+  // TODO allow user to specify decimal or hex output for integers
   // TODO allow user to specify tabs or spaces
 
   /* Start parsing the command stream */

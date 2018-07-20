@@ -62,3 +62,4 @@ Miscellaneous:
 
 - [ ] Clean up unused code and includes once interal design is finalised
 - [ ] Use byte count in read_exact macro
+- [ ] Use nicer match statements per Rust 1.26 - this will reduce quite a bit of &/ref cruft

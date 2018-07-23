@@ -10,7 +10,7 @@ There is no schedule for development.
 
 ### Building and running ox
 
-Currently ox builds and runs with rust 1.27 stable. To run it on an NWScript file, you the appropriate definitions file. They are IP of the relevant companies so you must use your own copies, I can't provide any here.
+Currently ox builds and runs with rust 1.27 stable. To run it on an NWScript file, you also need to pass it the appropriate definitions file. They are IP of the relevant companies so you must use your own copies -- I can't provide any here.
 
 ### TODO
 
